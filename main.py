@@ -9,6 +9,8 @@ from audio_processor import AudioProcessor
 from audio_recorder import AudioRecorder  # Importa o gravador de som
 from frequencyform_window import FrequencyPlotWindow
 from waveform_window import WaveformWindow
+import librosa
+import soundfile as sf
 
 
 class MediaPlayerUI(QWidget):
@@ -58,14 +60,20 @@ class MediaPlayerUI(QWidget):
         self.high_pass_button.setIcon(QIcon('icons/high_pass.png'))
         self.high_pass_button.setToolTip('Filtro Passa-Alta')
 
+        self.track_pass_button = QPushButton()
+        self.track_pass_button.setIcon(QIcon('icons/band_pass.png'))
+        self.track_pass_button.setToolTip('Filtro Passa-Faixa')
+
         self.band_pass_button = QPushButton()
         self.band_pass_button.setIcon(QIcon('icons/band_pass.png'))
-        self.band_pass_button.setToolTip('Filtro Passa-Faixa')
+        self.band_pass_button.setToolTip('Filtro Passa-Banda')
+        self.band_pass_button.clicked.connect(self.select_audio_pass_band)
+
 
         # Adicionando botões ao layout
         for button in [self.record_button, self.play_button, self.pause_button,
                        self.forward_button, self.rewind_button, self.low_pass_button,
-                       self.high_pass_button, self.band_pass_button]:
+                       self.high_pass_button, self.track_pass_button, self.band_pass_button]:
             button_layout.addWidget(button)
 
         # Lista de dispositivos de entrada (microfones)
@@ -217,6 +225,48 @@ class MediaPlayerUI(QWidget):
 
         if output_file:
             print(f"Arquivo filtrado salvo como: {output_file}")
+
+    def select_audio_pass_band(self):
+        options = QFileDialog.Options()
+        file, _ = QFileDialog.getOpenFileName(self, "Abrir Arquivo de Áudio", "", "Arquivos MP3 (*.mp3)",
+                                                  options=options)
+        print(file)
+        if file:
+            arquivo_saida = "records/musica_filtrada.wav"
+            freq_corte_inferior = 1000  # Frequência de corte inferior (Hz)
+            freq_corte_superior = 4000  # Frequência de corte superior (Hz)
+            self.aplicar_filtro_passa_banda_wav(file, arquivo_saida, freq_corte_inferior, freq_corte_superior)
+
+    def aplicar_filtro_passa_banda_wav(self, arquivo_entrada, arquivo_saida, freq_corte_inferior, freq_corte_superior):
+        """
+        Aplica um filtro passa-banda a um arquivo MP3 e salva como WAV.
+
+        Args:
+            arquivo_entrada (str): Caminho para o arquivo MP3 de entrada.
+            arquivo_saida (str): Caminho para o arquivo WAV de saída filtrado.
+            freq_corte_inferior (float): Frequência de corte inferior do filtro.
+            freq_corte_superior (float): Frequência de corte superior do filtro.
+        """
+
+        # Carrega o arquivo MP3
+        sinal_audio, taxa_amostragem = librosa.load(arquivo_entrada)
+
+        # Aplica a Transformada de Fourier
+        espectro = np.fft.fft(sinal_audio)
+        frequencias = np.fft.fftfreq(len(espectro), 1 / taxa_amostragem)
+
+        # Cria o filtro passa-banda
+        filtro = np.zeros_like(espectro)
+        filtro[(np.abs(frequencias) >= freq_corte_inferior) & (np.abs(frequencias) <= freq_corte_superior)] = 1
+
+        # Aplica o filtro
+        espectro_filtrado = espectro * filtro
+
+        # Aplica a Transformada de Fourier inversa
+        sinal_filtrado = np.fft.ifft(espectro_filtrado).real
+
+        # Salva o arquivo WAV filtrado
+        sf.write(arquivo_saida, sinal_filtrado, taxa_amostragem)
 
 
 if __name__ == '__main__':
